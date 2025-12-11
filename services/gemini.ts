@@ -2,8 +2,6 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { CocktailRecipe, UserProfile } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 // Schema for the structured JSON response
 const recipeSchema: Schema = {
   type: Type.OBJECT,
@@ -38,6 +36,9 @@ export const generateRecipe = async (
   strictMode: boolean = false,
   critique?: string
 ): Promise<CocktailRecipe> => {
+  // Initialize AI client inside the function to ensure the latest API key is used
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   let feedbackInstruction = "";
   if (critique) {
     feedbackInstruction = `
@@ -111,16 +112,14 @@ export const generateRecipe = async (
 };
 
 export const generateCocktailImage = async (visualDescription: string): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   const prompt = `Professional food and drink photography, 8k resolution, cinematic lighting. ${visualDescription}. photorealistic, condensation on glass, dramatic shadows, shallow depth of field.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image', // Using standard image generation model
+    model: 'gemini-2.5-flash-image',
     contents: {
       parts: [{ text: prompt }]
-    },
-    config: {
-      // Nano banana series (flash-image) config
-      // Note: responseMimeType and responseSchema are NOT supported for this model.
     }
   });
 

@@ -88,7 +88,7 @@ export const CocktailDisplay: React.FC<CocktailDisplayProps> = ({ cocktail, onRe
         {/* Right Column: Story & Actions */}
         <div className="space-y-8 sticky top-8">
           <div>
-            <h2 className="text-4xl md:text-5xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 mb-2">
+            <h2 className="text-4xl md:text-5xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 mb-2 pb-2">
               {cocktail.name}
             </h2>
             <p className="text-neon-pink font-medium tracking-wide text-sm md:text-base mb-6">
