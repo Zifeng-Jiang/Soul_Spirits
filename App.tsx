@@ -1,0 +1,205 @@
+
+import React, { useState, useEffect } from 'react';
+import { Header } from './components/Header';
+import { InputForm } from './components/InputForm';
+import { CocktailDisplay } from './components/CocktailDisplay';
+import { InventoryModal } from './components/InventoryModal';
+import { generateRecipe, generateCocktailImage } from './services/gemini';
+import { UserProfile, GeneratedCocktail, AppStatus } from './types';
+
+function App() {
+  const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
+  const [cocktail, setCocktail] = useState<GeneratedCocktail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  
+  // State to persist user inputs between sessions
+  const [savedProfile, setSavedProfile] = useState<UserProfile | undefined>(undefined);
+
+  // Inventory State
+  const [inventory, setInventory] = useState<string[]>([]);
+  const [strictMode, setStrictMode] = useState(false);
+  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+
+  // Load inventory from localStorage on mount
+  useEffect(() => {
+    const savedInv = localStorage.getItem('soul-spirits-inventory');
+    const savedStrict = localStorage.getItem('soul-spirits-strict');
+    if (savedInv) setInventory(JSON.parse(savedInv));
+    if (savedStrict) setStrictMode(JSON.parse(savedStrict));
+  }, []);
+
+  // Save inventory to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('soul-spirits-inventory', JSON.stringify(inventory));
+    localStorage.setItem('soul-spirits-strict', JSON.stringify(strictMode));
+  }, [inventory, strictMode]);
+
+  const handleCreateCocktail = async (profile: UserProfile, critique?: string) => {
+    // Save the profile so it can be restored if the user wants to try again
+    if (!critique) {
+      setSavedProfile(profile);
+    }
+    
+    setStatus(AppStatus.GENERATING_RECIPE);
+    setError(null);
+    setCocktail(null);
+
+    try {
+      // Step 1: Generate Recipe Logic
+      // Pass the critique if this is a redo request, plus inventory settings
+      const recipe = await generateRecipe(profile, inventory, strictMode, critique);
+      
+      // Update state with recipe immediately so user knows something happened
+      // However, we wait for image to show the full display
+      setStatus(AppStatus.GENERATING_IMAGE);
+
+      // Step 2: Generate Visuals
+      const imageUrl = await generateCocktailImage(recipe.visualDescription);
+
+      // Combine results
+      setCocktail({
+        ...recipe,
+        imageUrl
+      });
+      setStatus(AppStatus.COMPLETE);
+
+    } catch (err: any) {
+      console.error("Generation failed:", err);
+      setError(err.message || "The spirits were silent. Please try again.");
+      setStatus(AppStatus.ERROR);
+    }
+  };
+
+  const handleRedo = (feedback: string) => {
+    if (savedProfile) {
+      handleCreateCocktail(savedProfile, feedback);
+    }
+  };
+
+  const resetApp = () => {
+    setStatus(AppStatus.IDLE);
+    setCocktail(null);
+    setError(null);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black text-slate-100 selection:bg-neon-purple selection:text-white pb-20 relative">
+      <div className="container mx-auto px-4 max-w-7xl">
+        <Header />
+
+        <main className="mt-8 md:mt-12">
+          {status === AppStatus.IDLE && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start animate-fade-in-up">
+              
+              {/* Introduction & Hero Section */}
+              <div className="lg:col-span-5 space-y-8 pt-4">
+                <div>
+                  <h2 className="text-3xl md:text-5xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400 mb-6">
+                    A Cocktail as Unique as Your Soul
+                  </h2>
+                  <p className="text-slate-300 text-lg leading-relaxed mb-6">
+                    Welcome to <span className="text-neon-blue font-semibold">Soul Spirits</span>. We don't just mix drinks; we translate your personality into liquid art. 
+                  </p>
+                  <p className="text-slate-400 leading-relaxed">
+                    By analyzing your astrological sign, MBTI personality type, and current emotional state, our AI mixologist crafts a bespoke recipe tailored specifically to your vibe right now.
+                  </p>
+                </div>
+
+                <div className="glass-panel p-6 rounded-xl border-l-4 border-neon-purple">
+                  <h3 className="text-white font-bold uppercase tracking-widest text-sm mb-4">How it works</h3>
+                  <ul className="space-y-4">
+                    <li className="flex items-center gap-3 text-slate-300">
+                      <span className="flex items-center justify-center min-w-[2rem] w-8 h-8 rounded-full bg-slate-800 text-neon-purple border border-slate-700 font-bold">1</span>
+                      <span className="font-medium">Share your mood, personality, and vibe.</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-slate-300">
+                      <span className="flex items-center justify-center min-w-[2rem] w-8 h-8 rounded-full bg-slate-800 text-neon-blue border border-slate-700 font-bold">2</span>
+                      <span className="font-medium">AI crafts your custom recipe & visuals.</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-slate-300">
+                      <span className="flex items-center justify-center min-w-[2rem] w-8 h-8 rounded-full bg-slate-800 text-neon-pink border border-slate-700 font-bold">3</span>
+                      <span className="font-medium">Love it? Make it. Or refine & remix.</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="hidden lg:block text-slate-500 text-sm italic">
+                  * Must be 21+ to use. Please drink responsibly.
+                </div>
+              </div>
+
+              {/* Form Section */}
+              <div className="lg:col-span-7">
+                <InputForm 
+                  onSubmit={(profile) => handleCreateCocktail(profile)} 
+                  isLoading={false} 
+                  initialData={savedProfile}
+                />
+              </div>
+            </div>
+          )}
+
+          {(status === AppStatus.GENERATING_RECIPE || status === AppStatus.GENERATING_IMAGE) && (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] animate-pulse">
+              <div className="w-20 h-20 border-4 border-neon-purple border-t-transparent rounded-full animate-spin mb-8"></div>
+              <h2 className="text-2xl font-serif italic text-transparent bg-clip-text bg-gradient-to-r from-neon-blue to-neon-purple">
+                {status === AppStatus.GENERATING_RECIPE ? "Divining the perfect recipe..." : "Materializing your spirit..."}
+              </h2>
+              <p className="text-slate-500 mt-2 text-sm uppercase tracking-widest">
+                AI is mixing ingredients
+              </p>
+            </div>
+          )}
+
+          {status === AppStatus.ERROR && (
+            <div className="max-w-md mx-auto text-center mt-12 glass-panel p-8 rounded-xl border-red-500/30">
+              <div className="text-red-400 text-4xl mb-4">⚠</div>
+              <h3 className="text-xl font-bold text-red-200 mb-2">Generation Failed</h3>
+              <p className="text-slate-400 mb-6">{error}</p>
+              <button 
+                onClick={resetApp}
+                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {status === AppStatus.COMPLETE && cocktail && (
+            <CocktailDisplay 
+              cocktail={cocktail} 
+              onReset={resetApp} 
+              onRedo={handleRedo}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Floating Inventory Button */}
+      <button 
+        onClick={() => setIsInventoryOpen(true)}
+        className="fixed bottom-6 left-6 z-40 bg-slate-800/90 hover:bg-neon-purple text-white p-4 rounded-full shadow-lg shadow-black/50 border border-slate-600 hover:border-white transition-all duration-300 group"
+        title="Bar Inventory"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+        <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          Manage Inventory
+        </span>
+      </button>
+
+      {/* Inventory Modal */}
+      <InventoryModal 
+        isOpen={isInventoryOpen}
+        onClose={() => setIsInventoryOpen(false)}
+        inventory={inventory}
+        setInventory={setInventory}
+        strictMode={strictMode}
+        setStrictMode={setStrictMode}
+      />
+    </div>
+  );
+}
+
+export default App;
